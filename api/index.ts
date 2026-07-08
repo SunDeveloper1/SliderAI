@@ -4,7 +4,6 @@ dotenv.config({ override: true });
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { createServer as createViteServer } from "vite";
 import pg from "pg";
 import { GoogleGenAI, Type } from "@google/genai";
 import { MongoClient } from "mongodb";
@@ -1128,6 +1127,7 @@ Generate your response adhering perfectly to your assigned personality, system i
   // Serve Vite or static public client bundle
   if (!process.env.VERCEL) {
     if (process.env.NODE_ENV !== "production") {
+      const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",
