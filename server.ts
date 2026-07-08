@@ -11,6 +11,10 @@ import { MongoClient } from "mongodb";
 
 const DB_FILE = path.join(process.cwd(), "workspaces_db.json");
 
+const app = express();
+const PORT = 3000;
+
+
 // Parse DB_VENDOR robustly (case-insensitive, trimmed, defaults to FIREBASE)
 const rawVendor = (process.env.DB_VENDOR || "FIREBASE").trim().toUpperCase();
 const isPostgres = rawVendor === "POSTGRES";
@@ -616,9 +620,6 @@ async function startServer() {
     await initPgTables();
   }
 
-  const app = express();
-  const PORT = 3000;
-
   app.use(express.json());
 
   // Log requests
@@ -1125,23 +1126,27 @@ Generate your response adhering perfectly to your assigned personality, system i
   });
 
   // Serve Vite or static public client bundle
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+  if (!process.env.VERCEL) {
+    if (process.env.NODE_ENV !== "production") {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), "dist");
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server ScribeSlide AI active on local port: ${PORT}`);
     });
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server ScribeSlide AI active on local port: ${PORT}`);
-  });
 }
 
 startServer();
+
+export default app;
