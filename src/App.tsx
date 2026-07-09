@@ -107,6 +107,7 @@ export default function App() {
   const [ttsPaused, setTtsPaused] = useState(false);
   const [ttsLoading, setTtsLoading] = useState(false);
   const [ttsSpeed, setTtsSpeed] = useState<number>(1.0);
+  const ttsSpeedRef = useRef<number>(1.0);
   const [audioCurrentTime, setAudioCurrentTime] = useState<number>(0);
   const [audioDuration, setAudioDuration] = useState<number>(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -573,6 +574,7 @@ export default function App() {
   // Resume vocal speech playback
   const handleResumeSpeech = () => {
     if (audioRef.current && ttsPaused) {
+      audioRef.current.playbackRate = ttsSpeedRef.current;
       audioRef.current.play().then(() => {
         setTtsPaused(false);
       }).catch(err => {
@@ -586,7 +588,7 @@ export default function App() {
     if (audioRef.current) {
       const newTime = Math.max(0, audioRef.current.currentTime - 5);
       audioRef.current.currentTime = newTime;
-      audioRef.current.playbackRate = ttsSpeed;
+      audioRef.current.playbackRate = ttsSpeedRef.current;
       setAudioCurrentTime(newTime);
     }
   };
@@ -596,7 +598,7 @@ export default function App() {
     if (audioRef.current) {
       const newTime = Math.min(audioDuration, audioRef.current.currentTime + 5);
       audioRef.current.currentTime = newTime;
-      audioRef.current.playbackRate = ttsSpeed;
+      audioRef.current.playbackRate = ttsSpeedRef.current;
       setAudioCurrentTime(newTime);
     }
   };
@@ -605,7 +607,7 @@ export default function App() {
   const handleSeek = (newTime: number) => {
     if (audioRef.current) {
       audioRef.current.currentTime = newTime;
-      audioRef.current.playbackRate = ttsSpeed;
+      audioRef.current.playbackRate = ttsSpeedRef.current;
       setAudioCurrentTime(newTime);
     }
   };
@@ -653,15 +655,15 @@ export default function App() {
 
       // Prevent browsers from reverting user custom playback rate during playback changes
       audio.onratechange = () => {
-        if (audio.playbackRate !== ttsSpeed) {
-          audio.playbackRate = ttsSpeed;
+        if (audio.playbackRate !== ttsSpeedRef.current) {
+          audio.playbackRate = ttsSpeedRef.current;
         }
       };
 
       // Trigger standard HTML5 media behaviors with secure play triggers
       audio.oncanplaythrough = () => {
         setTtsLoading(false);
-        audio.playbackRate = ttsSpeed;
+        audio.playbackRate = ttsSpeedRef.current;
         setAudioDuration(audio.duration || 0);
         audio.play().catch((playErr) => {
           console.error("Audio playback interrupted by browser constraints:", playErr);
@@ -2359,6 +2361,7 @@ export default function App() {
                               onChange={(e) => {
                                 const newSpeed = parseFloat(e.target.value);
                                 setTtsSpeed(newSpeed);
+                                ttsSpeedRef.current = newSpeed;
                                 if (audioRef.current) {
                                   audioRef.current.playbackRate = newSpeed;
                                 }
