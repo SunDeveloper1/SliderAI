@@ -168,7 +168,10 @@ function getMongoDb() {
     if (!uri) {
       throw new Error("DB_URI or MONGODB_URI environment variable is required because DB_VENDOR is set to MONGODB");
     }
-    mongoClient = new MongoClient(uri);
+    mongoClient = new MongoClient(uri, {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 10000
+    });
   }
   return mongoClient.db();
 }

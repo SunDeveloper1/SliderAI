@@ -33,6 +33,7 @@ import {
   BookOpen,
   Eye,
   ChevronRight,
+  ChevronDown,
   Edit3,
   Palette,
   ZoomIn,
@@ -100,6 +101,7 @@ export default function App() {
   
   // TTS State Managers
   const [ttsPlaying, setTtsPlaying] = useState(false);
+  const [ttsPaused, setTtsPaused] = useState(false);
   const [ttsLoading, setTtsLoading] = useState(false);
   const [ttsSpeed, setTtsSpeed] = useState<number>(1.0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -118,6 +120,8 @@ export default function App() {
   const [previewWidth, setPreviewWidth] = useState<number>(420);
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const [isReaderMode, setIsReaderMode] = useState<boolean>(false);
+  const [isSplitView, setIsSplitView] = useState<boolean>(false);
+  const [showReaderHeader, setShowReaderHeader] = useState<boolean>(false);
   const [readerTheme, setReaderTheme] = useState<"warm" | "light" | "dark">("warm");
   const [readerFontSize, setReaderFontSize] = useState<number>(18);
   const [readerFontFamily, setReaderFontFamily] = useState<"serif" | "sans" | "mono">("serif");
@@ -547,6 +551,26 @@ export default function App() {
       audioRef.current = null;
     }
     setTtsPlaying(false);
+    setTtsPaused(false);
+  };
+
+  // Pause vocal speech playback
+  const handlePauseSpeech = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      setTtsPaused(true);
+    }
+  };
+
+  // Resume vocal speech playback
+  const handleResumeSpeech = () => {
+    if (audioRef.current && ttsPaused) {
+      audioRef.current.play().then(() => {
+        setTtsPaused(false);
+      }).catch(err => {
+        console.error("Failed to resume playback:", err);
+      });
+    }
   };
 
   // Indian Accent Natural Vocal Synthesizer Executor
@@ -555,10 +579,14 @@ export default function App() {
 
     try {
       setTtsPlaying(true);
+      setTtsPaused(false);
       setTtsLoading(true);
 
       // Clean speech play queue
-      handleStopSpeech();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
 
       const response = await authFetch("/api/tts", {
         method: "POST",
@@ -582,21 +610,25 @@ export default function App() {
         audio.play().catch((playErr) => {
           console.error("Audio playback interrupted by browser constraints:", playErr);
           setTtsPlaying(false);
+          setTtsPaused(false);
         });
       };
 
       audio.onended = () => {
         setTtsPlaying(false);
+        setTtsPaused(false);
       };
 
       audio.onerror = () => {
         setTtsPlaying(false);
+        setTtsPaused(false);
         setTtsLoading(false);
         alert("Audio rendering resource error occurred.");
       };
     } catch (err) {
       console.error("Speech process engine failed:", err);
       setTtsPlaying(false);
+      setTtsPaused(false);
       setTtsLoading(false);
     }
   };
@@ -894,12 +926,14 @@ export default function App() {
           ──────────────────────────────────────────────────────────────────────── */}
       {currentWorkspaceId === null ? (
         <div className="flex-1 flex flex-col selection:bg-blue-100">
-          {/* Main Dashboard Navbar */}
-          <header className="bg-slate-900 text-white shadow-xl shadow-slate-900/10 px-6 py-4 flex items-center justify-between">
+          {/* Main Dashboard Navbar with Premium Glassmorphism */}
+          <header className="sticky top-0 z-50 bg-slate-950/75 backdrop-blur-xl border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.15)] px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Presentation className="w-7 h-7 text-blue-400" />
+              <div className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">
+                <Presentation className="w-5 h-5 text-white" />
+              </div>
               <div>
-                <h1 className="font-extrabold text-xl tracking-tight leading-none bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent">
+                <h1 className="font-extrabold text-xl tracking-tight leading-none bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
                   ScribeSlide AI Dashboard
                 </h1>
                 <p className="text-[10px] text-blue-300/80 font-mono mt-1 tracking-wider uppercase">Slide Workspace Controller</p>
@@ -909,7 +943,7 @@ export default function App() {
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setIsAiZoneOpen(true)}
-                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-200 transition select-none cursor-pointer group shadow-sm"
+                className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-200 transition select-none cursor-pointer group shadow-sm"
                 title="Manage Browser-Cached LLMs and Custom Agents"
               >
                 <Brain className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-colors" />
@@ -918,7 +952,7 @@ export default function App() {
 
               <button
                 onClick={() => setIsPreviewCompareOpen(true)}
-                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-200 transition select-none cursor-pointer group shadow-sm"
+                className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-200 transition select-none cursor-pointer group shadow-sm"
                 title="Compare Markdown previews side by side"
               >
                 <Columns className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-colors" />
@@ -927,10 +961,10 @@ export default function App() {
 
               <div
                 onClick={handleDeauthenticate}
-                className="flex items-center gap-2.5 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 px-3.5 py-1.5 rounded-full cursor-pointer transition select-none group"
+                className="flex items-center gap-2.5 bg-white/5 hover:bg-white/10 border border-white/10 px-3.5 py-1.5 rounded-full cursor-pointer transition select-none group"
                 title="Deauthorise / Switch User Account"
               >
-                <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center font-bold text-xxs text-white">
+                <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center font-bold text-xxs text-white shadow-md shadow-blue-500/20">
                   {activeUser?.username?.slice(0, 2).toUpperCase()}
                 </div>
                 <div className="flex flex-col text-left">
@@ -1079,45 +1113,47 @@ export default function App() {
           ──────────────────────────────────────────────────────────────────────── */
         <div className="flex-1 flex flex-col h-screen overflow-hidden selection:bg-blue-100">
           
-          {/* Workspace Presentation Header Toolbar */}
-          <header className="bg-slate-900 text-white shadow-md border-b border-slate-800 px-4 py-3 flex items-center justify-between shrink-0 select-none">
+          {/* Workspace Presentation Header Toolbar with Premium Glassmorphism */}
+          <header className="sticky top-0 z-40 bg-slate-950/75 backdrop-blur-xl border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.15)] px-4 py-3 flex items-center justify-between shrink-0 select-none">
             <div className="flex items-center gap-3 min-w-0">
               <button
                 onClick={() => {
                   handleStopSpeech();
                   setCurrentWorkspaceId(null);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded bg-slate-800 hover:bg-slate-700 hover:text-white transition"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 hover:text-white transition cursor-pointer"
                 title="Go back to dashboard"
               >
                 <ChevronLeft className="w-4 h-4" />
                 <span>Dashboard</span>
               </button>
               
-              <div className="h-5 w-px bg-slate-755 mx-1" />
+              <div className="h-5 w-px bg-white/10 mx-1" />
               
               <div className="flex items-center gap-2 min-w-0">
-                <FolderOpen className="w-4 h-4 text-sky-400 shrink-0" />
-                <span className="font-extrabold text-sm sm:text-base tracking-tight truncate block">
+                <div className="p-1 bg-sky-500/10 border border-sky-500/20 rounded-md">
+                  <FolderOpen className="w-4 h-4 text-sky-400 shrink-0" />
+                </div>
+                <span className="font-extrabold text-sm sm:text-base tracking-tight text-slate-100 truncate block">
                   {workspaceName}
                 </span>
                 
                 {/* Synced AutoSave Notification Bar */}
-                <span className="shrink-0 flex items-center gap-1.5 text-[10px] uppercase font-mono px-2 py-0.5 rounded-md bg-slate-800 font-medium">
+                <span className="shrink-0 flex items-center gap-1.5 text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full bg-black/40 border border-white/5 font-medium">
                   {saveStatus === "saving" && (
                     <>
                       <Loader2 className="w-2.5 h-2.5 text-amber-400 animate-spin" />
-                      <span className="text-amber-400">Syncing...</span>
+                      <span className="text-amber-400 font-bold">Syncing...</span>
                     </>
                   )}
                   {saveStatus === "saved" && (
                     <>
                       <Check className="w-2.5 h-2.5 text-emerald-400" />
-                      <span className="text-emerald-400">Synced</span>
+                      <span className="text-emerald-400 font-bold">Synced</span>
                     </>
                   )}
-                  {saveStatus === "idle" && <span className="text-slate-400">Idle</span>}
-                  {saveStatus === "error" && <span className="text-rose-400">Sync Error</span>}
+                  {saveStatus === "idle" && <span className="text-slate-400 font-bold">Idle</span>}
+                  {saveStatus === "error" && <span className="text-rose-400 font-bold">Sync Error</span>}
                 </span>
               </div>
             </div>
@@ -1127,18 +1163,18 @@ export default function App() {
               <button
                 onClick={() => setIsAiZoneOpen(true)}
                 title="Manage local LLMs and Custom Agents"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-slate-100 border border-slate-800 transition rounded"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold uppercase bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition rounded-full cursor-pointer"
               >
-                <Brain className="w-3.5 h-3.5" />
+                <Brain className="w-3.5 h-3.5 text-indigo-400" />
                 <span className="hidden sm:inline">AI Zone</span>
               </button>
 
               <button
                 onClick={downloadMarkdown}
                 title="Download RAW markdown Presentation file"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase bg-slate-800 hover:bg-slate-700 hover:text-white transition rounded"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold uppercase bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition rounded-full cursor-pointer"
               >
-                <Download className="w-3.5 h-3.5" />
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
                 <span className="hidden sm:inline">Export MD</span>
               </button>
 
@@ -1147,7 +1183,7 @@ export default function App() {
                   alert(`Presenter Link: ${window.location.origin}/workspace/${currentWorkspaceId}`);
                 }}
                 title="Share presentation outline link"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase bg-blue-600 hover:bg-blue-500 text-white transition rounded shadow"
+                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold uppercase bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition rounded-full shadow-md shadow-blue-500/10 cursor-pointer"
               >
                 <Share2 className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Share Pitch</span>
@@ -1161,14 +1197,14 @@ export default function App() {
             {/* 1. LEFT COLUMN: SLIDES SELECTION */}
             <aside className="w-[200px] bg-slate-100 border-r border-slate-200 flex flex-col shrink-0 select-none">
               
-              {/* Grid vs Outline Switch Toolbar */}
-              <div className="p-3 border-b border-slate-200">
-                <div className="flex bg-slate-200 p-1 rounded-md text-[10px] font-bold uppercase tracking-wider">
+              {/* Grid vs Outline Switch Toolbar with Glassmorphism */}
+              <div className="p-3 border-b border-slate-200 bg-white/70 backdrop-blur-md sticky top-0 z-10 shadow-[0_1px_5px_rgba(0,0,0,0.01)]">
+                <div className="flex bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/50 shadow-inner text-[10px] font-bold uppercase tracking-wider">
                   <button
                     onClick={() => setSidebarMode("GRID")}
-                    className={`flex-1 py-1 px-2 rounded-sm transition text-center cursor-pointer ${
+                    className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${
                       sidebarMode === "GRID"
-                        ? "bg-white text-slate-900 shadow-xs"
+                        ? "bg-white text-slate-850 shadow-md ring-1 ring-slate-200/55 font-extrabold text-blue-600"
                         : "text-slate-500 hover:text-slate-900"
                     }`}
                   >
@@ -1176,9 +1212,9 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => setSidebarMode("OUTLINE")}
-                    className={`flex-1 py-1 px-2 rounded-sm transition text-center cursor-pointer ${
+                    className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${
                       sidebarMode === "OUTLINE"
-                        ? "bg-white text-slate-900 shadow-xs"
+                        ? "bg-white text-slate-850 shadow-md ring-1 ring-slate-200/55 font-extrabold text-blue-600"
                         : "text-slate-500 hover:text-slate-900"
                     }`}
                   >
@@ -1316,13 +1352,13 @@ export default function App() {
 
             {/* 2. MIDDLE COLUMN: MARKDOWN CODE EDITOR & WHITEBOARD CANVAS WORKSPACE */}
             <section className="flex-1 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
-              <div className="h-12 border-b border-slate-150 flex items-center px-4 justify-between bg-slate-50/80 shrink-0">
-                <div className="flex bg-slate-200/60 p-0.5 rounded-lg border border-slate-250">
+              <div className="h-12 border-b border-slate-200/60 flex items-center px-4 justify-between bg-white/75 backdrop-blur-md sticky top-0 z-10 shrink-0 shadow-[0_1px_5px_rgba(0,0,0,0.02)]">
+                <div className="flex bg-slate-100/85 p-0.5 rounded-xl border border-slate-200/60 shadow-inner">
                   <button
                     onClick={() => toggleEditorMode("MARKDOWN")}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all duration-150 flex items-center gap-1.5 cursor-pointer ${
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all duration-150 flex items-center gap-1.5 cursor-pointer ${
                       activeEditorMode === "MARKDOWN"
-                        ? "bg-white text-slate-850 shadow-xs ring-1 ring-slate-200"
+                        ? "bg-white text-slate-850 shadow-md ring-1 ring-slate-200/50"
                         : "text-slate-500 hover:text-slate-900"
                     }`}
                   >
@@ -1331,9 +1367,9 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => toggleEditorMode("CANVAS")}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all duration-150 flex items-center gap-1.5 cursor-pointer ${
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all duration-150 flex items-center gap-1.5 cursor-pointer ${
                       activeEditorMode === "CANVAS"
-                        ? "bg-white text-slate-850 shadow-xs ring-1 ring-slate-200"
+                        ? "bg-white text-slate-850 shadow-md ring-1 ring-slate-200/50"
                         : "text-slate-500 hover:text-slate-900"
                     }`}
                   >
@@ -1343,8 +1379,8 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold text-slate-400 bg-white border border-slate-150 px-2.5 py-0.5 rounded-full select-none shadow-2xs">
-                    {activeEditorMode === "CANVAS" ? "Vector Graphics Sketch" : "Markdown Text Presentation"}
+                  <span className="text-[10px] font-mono font-extrabold text-slate-550 bg-white/90 border border-slate-200/80 px-3 py-0.5 rounded-full select-none shadow-[0_2px_8px_rgba(0,0,0,0.03)] uppercase tracking-wider">
+                    {activeEditorMode === "CANVAS" ? "Vector Sketch" : "Markdown Slide Content"}
                   </span>
                 </div>
               </div>
@@ -1390,37 +1426,37 @@ export default function App() {
                   style={{ width: `${previewWidth}px` }}
                   className="bg-slate-100 flex flex-col shrink-0 overflow-hidden select-none border-l border-slate-200 shadow-xs"
                 >
-                  {/* Option Selector Toggle Bar */}
-                  <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
-                    <div className="flex bg-slate-200/90 p-0.5 rounded-lg border border-slate-250">
+                  {/* Option Selector Toggle Bar with Light Glassmorphism */}
+                  <div className="p-3 bg-white/75 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between gap-3 shrink-0 shadow-[0_1px_5px_rgba(0,0,0,0.02)] sticky top-0 z-10">
+                    <div className="flex bg-slate-100/85 p-0.5 rounded-xl border border-slate-200/60 shadow-inner">
                       <button
                         onClick={() => setIsReaderMode(false)}
-                        className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition duration-150 flex items-center gap-1.5 ${
+                        className={`px-3 py-1 text-[11px] font-bold rounded-lg transition duration-150 flex items-center gap-1.5 cursor-pointer ${
                           !isReaderMode
-                            ? "bg-white text-slate-800 shadow-xs border border-transparent"
+                            ? "bg-white text-slate-800 shadow-md ring-1 ring-slate-200/50"
                             : "text-slate-500 hover:text-slate-800"
                         }`}
                       >
-                        <Presentation className="w-3.5 h-3.5" />
+                        <Presentation className="w-3.5 h-3.5 text-blue-600" />
                         <span className="hidden sm:inline">Card View</span>
                       </button>
                       <button
                         onClick={() => setIsReaderMode(true)}
-                        className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition duration-150 flex items-center gap-1.5 ${
+                        className={`px-3 py-1 text-[11px] font-bold rounded-lg transition duration-150 flex items-center gap-1.5 cursor-pointer ${
                           isReaderMode
-                            ? "bg-white text-slate-800 shadow-xs border border-transparent"
+                            ? "bg-white text-slate-800 shadow-md ring-1 ring-slate-200/50"
                             : "text-slate-500 hover:text-slate-800"
                         }`}
                       >
-                        <BookOpen className="w-3.5 h-3.5" />
+                        <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
                         <span className="hidden sm:inline">Reader View</span>
                       </button>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => setPreviewZoom(prev => Math.max(50, prev - 10))}
-                        className="p-1.5 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-200 transition cursor-pointer"
+                        className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-transparent hover:border-slate-200/60 hover:shadow-2xs transition cursor-pointer"
                         title="Zoom Out Preview"
                       >
                         <ZoomOut className="w-3.5 h-3.5" />
@@ -1428,7 +1464,7 @@ export default function App() {
                       
                       <button
                         onClick={() => setPreviewZoom(100)}
-                        className="text-[10px] font-mono font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-200 px-1.5 py-1 rounded transition select-none"
+                        className="text-[10px] font-mono font-extrabold text-slate-550 hover:text-slate-850 hover:bg-slate-100 px-2 py-1 rounded-lg border border-transparent hover:border-slate-200/60 hover:shadow-2xs transition select-none cursor-pointer"
                         title="Reset Zoom to 100%"
                       >
                         {previewZoom}%
@@ -1436,17 +1472,17 @@ export default function App() {
 
                       <button
                         onClick={() => setPreviewZoom(prev => Math.min(150, prev + 10))}
-                        className="p-1.5 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-200 transition cursor-pointer"
+                        className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-transparent hover:border-slate-200/60 hover:shadow-2xs transition cursor-pointer"
                         title="Zoom In Preview"
                       >
                         <ZoomIn className="w-3.5 h-3.5" />
                       </button>
 
-                      <div className="w-px h-4 bg-slate-250 mx-0.5" />
+                      <div className="w-px h-4 bg-slate-200 mx-1" />
 
                       <button
                         onClick={() => setIsFullscreen(true)}
-                        className="p-1.5 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-200 transition cursor-pointer"
+                        className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-transparent hover:border-slate-200/60 hover:shadow-2xs transition cursor-pointer"
                         title="Fullscreen Mode"
                       >
                         <Maximize2 className="w-4 h-4" />
@@ -1517,48 +1553,94 @@ export default function App() {
                           A+
                         </button>
                       </div>
+
+                      {/* Split View Toggle */}
+                      <button
+                        onClick={() => setIsSplitView(prev => !prev)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-md border transition cursor-pointer ${
+                          isSplitView
+                            ? "bg-indigo-50 border-indigo-200 text-indigo-700 font-bold"
+                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 font-bold"
+                        }`}
+                        title="Toggle Split View (Side-by-Side Columns)"
+                      >
+                        <Split className="w-3.5 h-3.5" />
+                        <span>Split View</span>
+                      </button>
                     </div>
                   )}
 
                   {/* TTS Narrator Control Bar (Above Live Preview) with speed control slider */}
                   <div className="px-4 py-3 bg-white border-b border-slate-200 flex flex-col gap-2 shrink-0 shadow-3xs">
                     <div className="flex items-center justify-between gap-3">
-                      {/* Narrator Listen/Stop toggle button */}
-                      <button
-                        disabled={!clientSlides[activeSlideIndex]?.markdownContent.trim()}
-                        onClick={() => {
-                          if (ttsPlaying) {
-                            handleStopSpeech();
-                          } else {
-                            handleGenerateTTS(
-                              clientSlides[activeSlideIndex]?.markdownContent || "Welcome to ScribeSlide AI presentation unit"
-                            );
-                          }
-                        }}
-                        className={`px-3 py-2.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer border shadow-4xs ${
-                          ttsPlaying
-                            ? "bg-rose-50 border-rose-250 text-rose-700 hover:bg-rose-100"
-                            : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
-                        }`}
-                        title={ttsPlaying ? "Stop Vocal Narration" : "Listen via Neural Text-to-Speech"}
-                      >
-                        {ttsLoading ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Loading Voice...</span>
-                          </>
-                        ) : ttsPlaying ? (
-                          <>
-                            <VolumeX className="w-3.5 h-3.5" />
-                            <span>Stop Narration</span>
-                          </>
+                      {/* Narrator Listen / Pause / Stop media control suite */}
+                      <div className="flex items-center gap-2">
+                        {!ttsPlaying ? (
+                          <button
+                            disabled={!clientSlides[activeSlideIndex]?.markdownContent.trim()}
+                            onClick={() => {
+                              handleGenerateTTS(
+                                clientSlides[activeSlideIndex]?.markdownContent || "Welcome to ScribeSlide AI presentation unit"
+                              );
+                            }}
+                            className="px-4 py-2.5 rounded-lg text-xs font-bold bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 transition flex items-center gap-2 cursor-pointer shadow-4xs disabled:opacity-50 disabled:cursor-not-allowed select-none font-sans"
+                            title="Listen via Neural Text-to-Speech"
+                          >
+                            {ttsLoading ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                                <span>Loading Voice...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                <span>Listen Slide</span>
+                              </>
+                            )}
+                          </button>
                         ) : (
-                          <>
-                            <Volume2 className="w-3.5 h-3.5 shrink-0" />
-                            <span>Listen Slide</span>
-                          </>
+                          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200/80 shadow-xs">
+                            {/* Pause / Resume Button */}
+                            {ttsLoading ? (
+                              <div className="px-3 py-1.5 text-xs text-slate-500 font-semibold flex items-center gap-2 select-none">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                                <span>Generating...</span>
+                              </div>
+                            ) : !ttsPaused ? (
+                              <button
+                                onClick={handlePauseSpeech}
+                                className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs select-none"
+                                title="Pause Speaking"
+                              >
+                                <span className="flex items-center gap-0.5 w-3 h-3 justify-center">
+                                  <span className="w-0.75 h-3 bg-slate-600 rounded-xs" />
+                                  <span className="w-0.75 h-3 bg-slate-600 rounded-xs" />
+                                </span>
+                                <span>Pause</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={handleResumeSpeech}
+                                className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-850 rounded-lg text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer shadow-2xs select-none"
+                                title="Resume Speaking"
+                              >
+                                <Play className="w-3 h-3 text-emerald-600" />
+                                <span>Resume</span>
+                              </button>
+                            )}
+
+                            {/* Stop Button */}
+                            <button
+                              onClick={handleStopSpeech}
+                              className="px-3 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 hover:text-rose-850 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs select-none"
+                              title="Stop Narration"
+                            >
+                              <VolumeX className="w-3.5 h-3.5 text-rose-600" />
+                              <span>Stop</span>
+                            </button>
+                          </div>
                         )}
-                      </button>
+                      </div>
 
                       {/* Speed Slider / Rate Control */}
                       <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg flex-1 max-w-[220px]">
@@ -1579,8 +1661,8 @@ export default function App() {
                     </div>
 
                     {/* Wave animation indicator while vocal is actively playing */}
-                    {ttsPlaying && !ttsLoading && (
-                      <div className="flex items-center gap-2 px-1 py-0.5 border-t border-slate-100 mt-1 pt-1.5">
+                    {ttsPlaying && !ttsLoading && !ttsPaused && (
+                      <div className="flex items-center gap-2 px-1 py-0.5 border-t border-slate-100 mt-1 pt-1.5 animate-fadeIn">
                         <span className="text-[9px] font-mono text-slate-400 uppercase tracking-widest shrink-0">Playing narration</span>
                         <div className="flex items-end gap-0.5 h-3.5 overflow-hidden">
                           <div className="w-0.5 bg-blue-500 animate-[bounce_0.8s_infinite] h-20" style={{ height: "8px" }} />
@@ -1591,20 +1673,45 @@ export default function App() {
                         </div>
                       </div>
                     )}
+
+                    {ttsPlaying && !ttsLoading && ttsPaused && (
+                      <div className="flex items-center gap-2 px-1 py-0.5 border-t border-slate-100 mt-1 pt-1.5 opacity-60">
+                        <span className="text-[9px] font-mono text-slate-400 uppercase tracking-widest shrink-0">Narration Paused</span>
+                        <div className="flex items-end gap-0.5 h-3.5 overflow-hidden">
+                          <div className="w-0.5 bg-slate-400 h-1.5" />
+                          <div className="w-0.5 bg-slate-400 h-2" />
+                          <div className="w-0.5 bg-slate-400 h-1" />
+                          <div className="w-0.5 bg-slate-400 h-1.5" />
+                          <div className="w-0.5 bg-slate-400 h-1" />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Main Preview Slide Card Body Frame */}
-                  <div className="flex-1 p-6 sm:p-8 overflow-y-auto bg-slate-200/60">
+                  <div 
+                    className={`flex-1 overflow-y-auto transition-colors duration-300 ${
+                      isReaderMode
+                        ? readerTheme === "warm"
+                          ? "bg-[#FAF6EF]"
+                          : readerTheme === "dark"
+                          ? "bg-[#1E2022]"
+                          : "bg-white"
+                        : "p-6 sm:p-8 bg-slate-200/60"
+                    }`}
+                  >
                     <div
-                      style={{ zoom: `${previewZoom}%` }}
-                      className={`flex flex-col p-8 sm:p-12 min-h-[460px] h-full justify-between rounded-2xl shadow-xl transition-all duration-305 ${
+                      style={isReaderMode ? {} : { zoom: `${previewZoom}%` }}
+                      className={`transition-all duration-300 ${
                         isReaderMode
-                          ? readerTheme === "warm"
-                            ? "bg-[#FAF6EF] text-[#2C2C2A] border border-[#e8dfcf]"
-                            : readerTheme === "dark"
-                            ? "bg-[#1E2022] text-[#E0E2E4] border border-slate-800"
-                            : "bg-white text-slate-800 border border-slate-200"
-                          : "bg-white rounded-2xl shadow-xl text-slate-800 border border-slate-200"
+                          ? `w-full min-h-full flex flex-col justify-between p-8 sm:p-12 md:p-16 ${isSplitView ? "max-w-7xl" : "max-w-4xl"} mx-auto ${
+                              readerTheme === "warm"
+                                ? "text-[#2C2C2A]"
+                                : readerTheme === "dark"
+                                ? "text-[#E0E2E4]"
+                                : "text-slate-800"
+                            }`
+                          : `flex flex-col p-8 sm:p-12 min-h-[460px] h-full justify-between rounded-2xl shadow-xl bg-white text-slate-800 border border-slate-200`
                       }`}
                     >
                       {/* Dynamic parsed slide visual elements */}
@@ -1614,6 +1721,7 @@ export default function App() {
                             content={clientSlides[activeSlideIndex].markdownContent}
                             canvasData={clientSlides[activeSlideIndex].canvasData || ""}
                             isReaderMode={isReaderMode}
+                            isSplitView={isSplitView}
                             readerTheme={readerTheme}
                             readerFontSize={readerFontSize}
                             readerFontFamily={readerFontFamily}
@@ -1809,122 +1917,323 @@ export default function App() {
 
       {/* FULLSCREEN IMMERSIVE PRESENTER & READER MODE */}
       {isFullscreen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-slate-900/98 select-none transition-all duration-300">
-          {/* Top Control Header */}
-          <header className="h-16 px-6 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0 text-white shadow-xl">
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-widest font-mono">Slideshow Playback</span>
-              <div className="h-4 w-px bg-slate-800" />
-              <span className="text-sm font-semibold text-slate-200 font-mono truncate max-w-xs sm:max-w-md">
-                {workspaceName || "Untitled Pitch"}
-              </span>
-            </div>
-
-            {/* In-view settings control Panel */}
-            <div className="flex items-center gap-4">
-              {/* Card vs Reader Mode Toggle in Fullscreen! */}
-              <div className="flex bg-slate-800/80 p-0.5 rounded-lg border border-slate-750">
-                <button
-                  onClick={() => setIsReaderMode(false)}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition duration-150 flex items-center gap-1.5 ${
-                    !isReaderMode
-                      ? "bg-indigo-600 text-white"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  <Presentation className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Card Layout</span>
-                </button>
-                <button
-                  onClick={() => setIsReaderMode(true)}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition duration-150 flex items-center gap-1.5 ${
-                    isReaderMode
-                      ? "bg-indigo-600 text-white"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Reader Layout</span>
-                </button>
+        <div className={`fixed inset-0 z-50 flex flex-col select-none transition-all duration-300 ${
+          isReaderMode
+            ? readerTheme === "warm"
+              ? "bg-[#FAF6EF]"
+              : readerTheme === "dark"
+              ? "bg-[#1E2022]"
+              : "bg-white"
+            : "bg-slate-900/98"
+        }`}>
+          {/* Top Control Header - Only shown in Card Layout */}
+          {!isReaderMode && (
+            <header className="h-16 px-6 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0 text-white shadow-xl">
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-widest font-mono">Slideshow Playback</span>
+                <div className="h-4 w-px bg-slate-800" />
+                <span className="text-sm font-semibold text-slate-200 font-mono truncate max-w-xs sm:max-w-md">
+                  {workspaceName || "Untitled Pitch"}
+                </span>
               </div>
 
-              {/* Reader customization choices in Fullscreen! */}
-              {isReaderMode && (
-                <div className="hidden lg:flex items-center gap-4 bg-slate-800/50 border border-slate-750/80 rounded-xl px-4 py-1">
-                  {/* Theme indicator */}
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setReaderTheme("warm")}
-                      className={`w-4.5 h-4.5 rounded-full border bg-[#FAF6EF] transition ${
-                        readerTheme === "warm" ? "ring-2 ring-amber-500 scale-110 border-transparent" : "border-slate-600"
-                      }`}
-                    />
-                    <button
-                      onClick={() => setReaderTheme("light")}
-                      className={`w-4.5 h-4.5 rounded-full border bg-white transition ${
-                        readerTheme === "light" ? "ring-2 ring-indigo-500 scale-110 border-transparent" : "border-slate-600"
-                      }`}
-                    />
-                    <button
-                      onClick={() => setReaderTheme("dark")}
-                      className={`w-4.5 h-4.5 rounded-full border bg-[#1E2022] transition ${
-                        readerTheme === "dark" ? "ring-2 ring-rose-500 scale-110 border-transparent" : "border-slate-600"
-                      }`}
-                    />
-                  </div>
-
-                  <div className="h-4 w-px bg-slate-750" />
-
-                  {/* Font dropdown */}
-                  <select
-                    value={readerFontFamily}
-                    onChange={(e) => setReaderFontFamily(e.target.value as any)}
-                    className="text-xs bg-slate-900 border border-slate-750 py-0.5 px-2 rounded-md outline-none text-slate-300 font-sans"
+              {/* In-view settings control Panel */}
+              <div className="flex items-center gap-4">
+                {/* Card vs Reader Mode Toggle in Fullscreen! */}
+                <div className="flex bg-slate-800/80 p-0.5 rounded-lg border border-slate-750">
+                  <button
+                    onClick={() => setIsReaderMode(false)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition duration-150 flex items-center gap-1.5 ${
+                      !isReaderMode
+                        ? "bg-indigo-600 text-white"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
                   >
-                    <option value="serif">Serif Font</option>
-                    <option value="sans">Sans Font</option>
-                    <option value="mono">Mono Font</option>
-                  </select>
+                    <Presentation className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Card Layout</span>
+                  </button>
+                  <button
+                    onClick={() => setIsReaderMode(true)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition duration-150 flex items-center gap-1.5 ${
+                      isReaderMode
+                        ? "bg-indigo-600 text-white"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Reader Layout</span>
+                  </button>
+                </div>
 
-                  <div className="h-4 w-px bg-slate-750" />
+                <div className="h-6 w-px bg-slate-800" />
 
-                  {/* Font Size controls */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setReaderFontSize(prev => Math.max(12, prev - 1))}
-                      className="w-5 h-5 text-xs font-semibold text-slate-400 hover:text-white rounded transition hover:bg-slate-700"
-                    >
-                      A-
-                    </button>
-                    <span className="text-xs font-mono font-bold text-slate-400">
-                      {readerFontSize}
-                    </span>
-                    <button
-                      onClick={() => setReaderFontSize(prev => Math.min(32, prev + 1))}
-                      className="w-5 h-5 text-xs font-semibold text-slate-400 hover:text-white rounded transition hover:bg-slate-700"
-                    >
-                      A+
-                    </button>
-                  </div>
+                {/* Close Fullscreen Button */}
+                <button
+                  onClick={() => setIsFullscreen(false)}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-rose-600/90 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition shadow-lg shrink-0 cursor-pointer"
+                  title="Press ESC key to exit"
+                >
+                  <Minimize2 className="w-3.5 h-3.5" />
+                  <span>Exit</span>
+                </button>
+              </div>
+            </header>
+          )}
+
+          {/* Floating Control Header for Reader Mode */}
+          {isReaderMode && (
+            <>
+              {/* Invisible Hover Zone at the absolute top of screen */}
+              <div
+                className="fixed top-0 left-0 right-0 h-6 z-50 bg-transparent cursor-pointer"
+                onMouseEnter={() => setShowReaderHeader(true)}
+              />
+
+              {/* Unobtrusive Tab Handle when header is hidden */}
+              {!showReaderHeader && (
+                <div
+                  onMouseEnter={() => setShowReaderHeader(true)}
+                  className="fixed top-0 left-1/2 -translate-x-1/2 z-50 px-4 py-1 rounded-b-lg bg-slate-900/80 border-x border-b border-slate-800 text-[10px] font-mono font-semibold text-indigo-400 hover:text-indigo-300 cursor-pointer shadow-lg backdrop-blur-sm transition-all duration-300 flex items-center gap-1"
+                >
+                  <ChevronDown className="w-3 h-3 animate-pulse" />
+                  <span>Hover for Reader Controls</span>
                 </div>
               )}
 
-              <div className="h-6 w-px bg-slate-800" />
-
-              {/* Close Fullscreen Button */}
-              <button
-                onClick={() => setIsFullscreen(false)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-rose-600/90 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition shadow-lg shrink-0 cursor-pointer"
-                title="Press ESC key to exit"
+              {/* The Floating Popover Panel */}
+              <div
+                onMouseEnter={() => setShowReaderHeader(true)}
+                onMouseLeave={() => setShowReaderHeader(false)}
+                className={`fixed left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-slate-900/95 backdrop-blur-md border border-slate-800 px-5 py-2.5 rounded-full shadow-2xl text-white transition-all duration-500 ${
+                  showReaderHeader
+                    ? "top-4 opacity-100 translate-y-0"
+                    : "-top-24 opacity-0 -translate-y-10 pointer-events-none"
+                }`}
               >
-                <Minimize2 className="w-3.5 h-3.5" />
-                <span>Exit</span>
-              </button>
-            </div>
-          </header>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-widest">Reader Mode</span>
+                  <div className="h-3 w-px bg-slate-800" />
+                  <span className="text-xs font-semibold text-slate-300 font-mono truncate max-w-[120px]">
+                    {workspaceName || "Pitch"}
+                  </span>
+                </div>
+
+                <div className="h-4 w-px bg-slate-800" />
+
+                {/* Card vs Reader Mode Toggle in Floating Pill */}
+                <div className="flex bg-slate-850 p-0.5 rounded-full border border-slate-800">
+                  <button
+                    onClick={() => setIsReaderMode(false)}
+                    className={`p-1 px-3 rounded-full text-[10px] font-bold transition duration-150 flex items-center gap-1 cursor-pointer ${
+                      !isReaderMode
+                        ? "bg-indigo-600 text-white"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                    title="Card View"
+                  >
+                    <Presentation className="w-3 h-3" />
+                    <span className="hidden sm:inline">Card</span>
+                  </button>
+                  <button
+                    onClick={() => setIsReaderMode(true)}
+                    className={`p-1 px-3 rounded-full text-[10px] font-bold transition duration-150 flex items-center gap-1 cursor-pointer ${
+                      isReaderMode
+                        ? "bg-indigo-600 text-white"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                    title="Reader View"
+                  >
+                    <BookOpen className="w-3 h-3" />
+                    <span className="hidden sm:inline">Reader</span>
+                  </button>
+                </div>
+
+                <div className="h-4 w-px bg-slate-800" />
+
+                {/* Theme Selector */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setReaderTheme("warm")}
+                    className={`w-4 h-4 rounded-full border bg-[#FAF6EF] transition ${
+                      readerTheme === "warm" ? "ring-2 ring-amber-500 scale-110 border-transparent" : "border-slate-700"
+                    }`}
+                    title="Warm Theme"
+                  />
+                  <button
+                    onClick={() => setReaderTheme("light")}
+                    className={`w-4 h-4 rounded-full border bg-white transition ${
+                      readerTheme === "light" ? "ring-2 ring-indigo-500 scale-110 border-transparent" : "border-slate-700"
+                    }`}
+                    title="Light Theme"
+                  />
+                  <button
+                    onClick={() => setReaderTheme("dark")}
+                    className={`w-4 h-4 rounded-full border bg-[#1E2022] transition ${
+                      readerTheme === "dark" ? "ring-2 ring-rose-500 scale-110 border-transparent" : "border-slate-700"
+                    }`}
+                    title="Dark Theme"
+                  />
+                </div>
+
+                <div className="h-4 w-px bg-slate-800" />
+
+                {/* Font dropdown */}
+                <select
+                  value={readerFontFamily}
+                  onChange={(e) => setReaderFontFamily(e.target.value as any)}
+                  className="text-[10px] bg-slate-950 border border-slate-800 py-0.5 px-1.5 rounded-md outline-none text-slate-300 font-sans cursor-pointer"
+                >
+                  <option value="serif">Serif</option>
+                  <option value="sans">Sans</option>
+                  <option value="mono">Mono</option>
+                </select>
+
+                <div className="h-4 w-px bg-slate-800" />
+
+                {/* Font Size controls */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setReaderFontSize(prev => Math.max(12, prev - 1))}
+                    className="w-4 h-4 flex items-center justify-center text-[10px] font-bold text-slate-400 hover:text-white rounded transition hover:bg-slate-800"
+                    title="Decrease Font Size"
+                  >
+                    -
+                  </button>
+                  <span className="text-[10px] font-mono font-bold text-slate-400 min-w-[12px] text-center">
+                    {readerFontSize}
+                  </span>
+                  <button
+                    onClick={() => setReaderFontSize(prev => Math.min(32, prev + 1))}
+                    className="w-4 h-4 flex items-center justify-center text-[10px] font-bold text-slate-400 hover:text-white rounded transition hover:bg-slate-800"
+                    title="Increase Font Size"
+                  >
+                    +
+                  </button>
+                </div>
+
+                {/* Split View Toggle */}
+                {isReaderMode && (
+                  <>
+                    <div className="h-4 w-px bg-slate-800" />
+                    <button
+                      onClick={() => setIsSplitView(prev => !prev)}
+                      className={`p-1 px-3 rounded-full text-[10px] font-bold transition duration-150 flex items-center gap-1 cursor-pointer ${
+                        isSplitView
+                          ? "bg-indigo-600 text-white"
+                          : "text-slate-400 hover:text-slate-200 bg-slate-800/40 hover:bg-slate-800"
+                      }`}
+                      title="Toggle Split Layout (2 Columns)"
+                    >
+                      <Split className="w-3 h-3" />
+                      <span>Split View</span>
+                    </button>
+                  </>
+                )}
+
+                <div className="h-4 w-px bg-slate-800" />
+
+                {/* Reader Mode Floating Speak / Pause / Stop Controls */}
+                <div className="flex items-center gap-1">
+                  {!ttsPlaying ? (
+                    <button
+                      disabled={!clientSlides[activeSlideIndex]?.markdownContent?.trim() || ttsLoading}
+                      onClick={() => {
+                        handleGenerateTTS(
+                          clientSlides[activeSlideIndex]?.markdownContent || "Welcome to ScribeSlide AI presentation unit"
+                        );
+                      }}
+                      className="p-1 px-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-full text-[10px] font-bold transition flex items-center gap-1 cursor-pointer select-none border border-transparent shadow-xs"
+                      title="Listen via Neural Text-to-Speech"
+                    >
+                      {ttsLoading ? (
+                        <Loader2 className="w-3 h-3 animate-spin text-white" />
+                      ) : (
+                        <Volume2 className="w-3 h-3 text-white shrink-0" />
+                      )}
+                      <span>Listen</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1.5 bg-slate-800/80 p-0.5 rounded-full border border-slate-700/80 shadow-xs">
+                      {/* Play/Pause toggle */}
+                      {ttsLoading ? (
+                        <div className="px-2.5 py-0.5 text-[9px] text-slate-300 font-semibold flex items-center gap-1 select-none">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-400" />
+                          <span>Generating...</span>
+                        </div>
+                      ) : !ttsPaused ? (
+                        <button
+                          onClick={handlePauseSpeech}
+                          className="p-1 px-2.5 bg-slate-700 hover:bg-slate-655 text-slate-200 rounded-full text-[10px] font-bold transition flex items-center gap-1 cursor-pointer select-none"
+                          title="Pause Narration"
+                        >
+                          <span className="flex items-center gap-0.5 w-2.5 h-2.5 justify-center">
+                            <span className="w-0.5 h-2 bg-slate-300 rounded-xs" />
+                            <span className="w-0.5 h-2 bg-slate-300 rounded-xs" />
+                          </span>
+                          <span>Pause</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleResumeSpeech}
+                          className="p-1 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-[10px] font-bold transition flex items-center gap-1 cursor-pointer select-none"
+                          title="Resume Narration"
+                        >
+                          <Play className="w-2.5 h-2.5 text-white fill-white" />
+                          <span>Resume</span>
+                        </button>
+                      )}
+
+                      {/* Stop Button */}
+                      <button
+                        onClick={handleStopSpeech}
+                        className="p-1 px-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full text-[10px] font-bold transition flex items-center gap-1 cursor-pointer select-none"
+                        title="Stop Narration"
+                      >
+                        <VolumeX className="w-3 h-3 text-white" />
+                        <span>Stop</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Reader Mode Audio Speed Controller */}
+                <div className="flex items-center gap-1.5 bg-slate-900/60 border border-slate-800 px-2 py-1 rounded-full shrink-0 select-none">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Speed</span>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2.0"
+                    step="0.1"
+                    value={ttsSpeed}
+                    onChange={(e) => {
+                      const newSpeed = parseFloat(e.target.value);
+                      setTtsSpeed(newSpeed);
+                      if (audioRef.current) {
+                        audioRef.current.playbackRate = newSpeed;
+                      }
+                    }}
+                    className="w-14 accent-blue-500 h-0.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <span className="text-[9px] font-mono font-bold text-slate-300 min-w-[22px] text-right">{ttsSpeed}x</span>
+                </div>
+
+                <div className="h-4 w-px bg-slate-800" />
+
+                {/* Exit Button */}
+                <button
+                  onClick={() => setIsFullscreen(false)}
+                  className="flex items-center gap-1 p-1 px-3 bg-rose-600 hover:bg-rose-500 text-white rounded-full text-[10px] font-bold transition shadow cursor-pointer"
+                  title="Exit Fullscreen"
+                >
+                  <Minimize2 className="w-3 h-3" />
+                  <span>Exit</span>
+                </button>
+              </div>
+            </>
+          )}
 
           {/* Core Player Slide Presentation Center Stage */}
-          <main className="flex-1 flex items-center justify-between px-8 sm:px-12 relative">
+          <main className={`flex-1 flex items-stretch justify-between relative overflow-hidden ${isReaderMode ? "p-0" : "px-8 sm:px-12"}`}>
             {/* LEFT NAVIGATION COLUMN */}
             <button
               disabled={activeSlideIndex === 0}
@@ -1933,57 +2242,69 @@ export default function App() {
                   setActiveSlideIndex(prev => prev - 1);
                 }
               }}
-              className="w-12 h-12 rounded-full border border-slate-800 bg-slate-950/60 hover:bg-slate-950 text-slate-400 hover:text-white flex items-center justify-center transition shadow-lg shrink-0 disabled:opacity-20 disabled:cursor-not-allowed group cursor-pointer"
+              className={isReaderMode 
+                ? `absolute left-6 top-1/2 -translate-y-1/2 z-40 w-12 h-12 rounded-full border flex items-center justify-center transition shadow-md shrink-0 disabled:opacity-0 disabled:pointer-events-none group cursor-pointer ${
+                    readerTheme === "dark"
+                      ? "border-slate-700/50 bg-slate-800/30 hover:bg-indigo-600 text-slate-400 hover:text-white"
+                      : "border-slate-300/50 bg-slate-200/30 hover:bg-indigo-600 text-slate-600 hover:text-white"
+                  }`
+                : "w-12 h-12 rounded-full border border-slate-800 bg-slate-950/60 hover:bg-slate-950 text-slate-400 hover:text-white flex items-center justify-center transition shadow-lg shrink-0 disabled:opacity-20 disabled:cursor-not-allowed group cursor-pointer"
+              }
             >
               <ChevronLeft className="w-6 h-6 transform transition group-hover:-translate-x-0.5" />
             </button>
 
             {/* CENTER SLIDE HOLDER */}
-            <div className="flex-1 max-w-4xl mx-8 py-8 h-full flex flex-col justify-center items-center">
+            <div className={`flex-1 transition-all duration-300 ${
+              isReaderMode 
+                ? "w-full h-full max-w-none mx-0 py-0 flex flex-col justify-stretch items-stretch" 
+                : "max-w-4xl mx-8 py-8 h-full flex flex-col justify-center items-center"
+            }`}>
               <div
-                className={`w-full max-h-[75vh] min-h-[460px] aspect-video rounded-2xl shadow-2xl flex flex-col p-12 relative overflow-hidden transition-all duration-300 border ${
+                className={`w-full flex flex-col transition-all duration-300 ${
                   isReaderMode
-                    ? readerTheme === "warm"
-                      ? "bg-[#FAF6EF] text-[#2C2417] border-[#e8dfcf] shadow-xl"
-                      : readerTheme === "dark"
-                      ? "bg-[#1E2022] text-[#E0E2E4] border-slate-800 shadow-xl"
-                      : "bg-white text-slate-800 border-slate-200 shadow-xl"
-                    : "bg-white text-slate-800 border-slate-250 shadow-2xl"
+                    ? "h-full min-h-0 border-0 rounded-none shadow-none bg-transparent"
+                    : "max-h-[75vh] min-h-[460px] aspect-video rounded-2xl shadow-2xl p-12 bg-white text-slate-800 border-slate-250 shadow-2xl flex flex-col relative overflow-hidden border"
                 }`}
               >
                 {/* Dynamically parsed slide contents inside fullscreen stage */}
-                <div className="flex-1 overflow-y-auto pr-1">
-                  {clientSlides[activeSlideIndex] ? (
-                    <SlideRenderer
-                      content={clientSlides[activeSlideIndex].markdownContent}
-                      canvasData={clientSlides[activeSlideIndex].canvasData || ""}
-                      isReaderMode={isReaderMode}
-                      readerTheme={readerTheme}
-                      readerFontSize={readerFontSize}
-                      readerFontFamily={readerFontFamily}
-                    />
-                  ) : (
-                    <div className="text-slate-400 text-center py-20 font-mono text-sm leading-normal">
-                      No active slide content found. Create a slide page first.
-                    </div>
-                  )}
-                </div>
+                <div className={isReaderMode ? `flex-1 overflow-y-auto w-full ${isSplitView ? "pt-6 pb-6 px-4 sm:px-6 md:px-8 max-w-none" : "pt-12 pb-12 px-6 sm:px-12 md:px-20"}` : "flex-1 overflow-y-auto pr-1"}>
+                  <div className={isReaderMode ? `${isSplitView ? "max-w-[96vw]" : "max-w-4xl"} mx-auto min-h-full flex flex-col justify-between w-full` : "h-full flex flex-col justify-between"}>
+                    {clientSlides[activeSlideIndex] ? (
+                      <SlideRenderer
+                        content={clientSlides[activeSlideIndex].markdownContent}
+                        canvasData={clientSlides[activeSlideIndex].canvasData || ""}
+                        isReaderMode={isReaderMode}
+                        isSplitView={isSplitView}
+                        readerTheme={readerTheme}
+                        readerFontSize={readerFontSize}
+                        readerFontFamily={readerFontFamily}
+                      />
+                    ) : (
+                      <div className="text-slate-400 text-center py-20 font-mono text-sm leading-normal">
+                        No active slide content found. Create a slide page first.
+                      </div>
+                    )}
 
-                {/* Footer section of center slide */}
-                <div className={`mt-auto flex justify-between items-end border-t pt-6 ${
-                  isReaderMode
-                    ? readerTheme === "warm"
-                      ? "border-[#ebdcc3] text-[#a89679]"
-                      : readerTheme === "dark"
-                      ? "border-slate-800 text-slate-500"
-                      : "border-slate-100 text-slate-400"
-                    : "border-slate-150 text-slate-350"
-                }`}>
-                  <div className="text-xs font-mono font-bold">
-                    Slide {activeSlideIndex + 1} / {clientSlides.length || 1}
-                  </div>
-                  <div className="text-[10px] font-sans font-bold uppercase tracking-widest opacity-60">
-                    {isReaderMode ? "ScribeSlide Fullscreen Reader" : "ScribeSlide Presentation"}
+                    {/* Footer section of center slide - Hidden in Split View */}
+                    {!isSplitView && (
+                      <div className={`mt-10 flex justify-between items-end border-t pt-6 shrink-0 ${
+                        isReaderMode
+                          ? readerTheme === "warm"
+                            ? "border-[#ebdcc3] text-[#a89679]"
+                            : readerTheme === "dark"
+                            ? "border-slate-800/80 text-slate-500"
+                            : "border-slate-100 text-slate-400"
+                          : "border-slate-150 text-slate-350"
+                      }`}>
+                        <div className="text-xs font-mono font-bold">
+                          Slide {activeSlideIndex + 1} / {clientSlides.length || 1}
+                        </div>
+                        <div className="text-[10px] font-sans font-bold uppercase tracking-widest opacity-60">
+                          {isReaderMode ? "ScribeSlide Fullscreen Reader" : "ScribeSlide Presentation"}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1997,16 +2318,25 @@ export default function App() {
                   setActiveSlideIndex(prev => prev + 1);
                 }
               }}
-              className="w-12 h-12 rounded-full border border-slate-800 bg-slate-950/60 hover:bg-slate-950 text-slate-400 hover:text-white flex items-center justify-center transition shadow-lg shrink-0 disabled:opacity-20 disabled:cursor-not-allowed group cursor-pointer"
+              className={isReaderMode 
+                ? `absolute right-6 top-1/2 -translate-y-1/2 z-40 w-12 h-12 rounded-full border flex items-center justify-center transition shadow-md shrink-0 disabled:opacity-0 disabled:pointer-events-none group cursor-pointer ${
+                    readerTheme === "dark"
+                      ? "border-slate-700/50 bg-slate-800/30 hover:bg-indigo-600 text-slate-400 hover:text-white"
+                      : "border-slate-300/50 bg-slate-200/30 hover:bg-indigo-600 text-slate-600 hover:text-white"
+                  }`
+                : "w-12 h-12 rounded-full border border-slate-800 bg-slate-950/60 hover:bg-slate-950 text-slate-400 hover:text-white flex items-center justify-center transition shadow-lg shrink-0 disabled:opacity-20 disabled:cursor-not-allowed group cursor-pointer"
+              }
             >
               <ChevronRight className="w-6 h-6 transform transition group-hover:translate-x-0.5" />
             </button>
           </main>
 
           {/* Bottom Keyboard Guide Strip */}
-          <footer className="h-10 bg-slate-950 border-t border-slate-850 text-[11px] text-slate-500 flex items-center justify-center font-mono gap-1 shrink-0 select-none uppercase tracking-wide">
-            <span>Arrow Keys ◀ / ▶ or Spacebar to change slides • Escape to exit fullscreen</span>
-          </footer>
+          {!isReaderMode && (
+            <footer className="h-10 bg-slate-950 border-t border-slate-850 text-[11px] text-slate-500 flex items-center justify-center font-mono gap-1 shrink-0 select-none uppercase tracking-wide">
+              <span>Arrow Keys ◀ / ▶ or Spacebar to change slides • Escape to exit fullscreen</span>
+            </footer>
+          )}
         </div>
       )}
 

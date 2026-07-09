@@ -9,6 +9,7 @@ interface SlideRendererProps {
   content: string;
   canvasData?: string;
   isReaderMode?: boolean;
+  isSplitView?: boolean;
   readerTheme?: "warm" | "light" | "dark";
   readerFontSize?: number;
   readerFontFamily?: "serif" | "sans" | "mono";
@@ -179,10 +180,53 @@ function highlightCode(code: string, lang: string): React.ReactNode {
   return code;
 }
 
+export function splitMarkdownIntoPages(markdown: string): string[] {
+  if (!markdown) return [""];
+
+  // 1. Try splitting by explicit horizontal rules first
+  // Handles: \n---\n, \n---\r\n, \n***\n, \n___\n with any spaces
+  const hrRegex = /\r?\n\s*(?:---|===|\*\*\*|___)\s*(?:\r?\n|$)/;
+  if (hrRegex.test(markdown)) {
+    const parts = markdown.split(hrRegex).map(p => p.trim()).filter(Boolean);
+    if (parts.length > 0) return parts;
+  }
+
+  // 2. Try splitting by major headings: H1 and H2
+  // We want to split *before* each heading so the heading starts a new page.
+  // Using positive lookahead with newline to split cleanly.
+  const headingRegex = /\r?\n(?=#{1,2}\s)/;
+  const headingParts = markdown.split(headingRegex).map(p => p.trim()).filter(Boolean);
+  if (headingParts.length > 1) {
+    return headingParts;
+  }
+
+  // 3. Fallback: Split by paragraphs, grouping them into pages so each page stays under a certain character budget.
+  // Budget is roughly 650 characters.
+  const paragraphs = markdown.split(/\r?\n\s*\r?\n/).map(p => p.trim()).filter(Boolean);
+  const pages: string[] = [];
+  let currentPage = "";
+
+  for (const para of paragraphs) {
+    // If adding this paragraph exceeds the target page length, start a new page
+    if (currentPage && (currentPage.length + para.length > 650)) {
+      pages.push(currentPage);
+      currentPage = para;
+    } else {
+      currentPage = currentPage ? currentPage + "\n\n" + para : para;
+    }
+  }
+  if (currentPage) {
+    pages.push(currentPage);
+  }
+
+  return pages.length > 0 ? pages : [markdown];
+}
+
 export default function SlideRenderer({
   content,
   canvasData,
   isReaderMode = false,
+  isSplitView = false,
   readerTheme = "warm",
   readerFontSize = 18,
   readerFontFamily = "serif"
@@ -252,7 +296,7 @@ export default function SlideRenderer({
       return (
         <h1
           style={isReaderMode ? { fontSize: "2.1em", lineHeight: "1.25" } : {}}
-          className={`font-extrabold ${strongColorClass} mb-6 border-b-4 ${headerBorder} pb-2.5 inline-block ${
+          className={`font-extrabold ${strongColorClass} mb-6 border-b-4 ${headerBorder} pb-2.5 inline-block break-inside-avoid-column break-inside-avoid ${
             isReaderMode ? "" : "text-3xl sm:text-4xl"
           }`}
           {...props}
@@ -270,7 +314,7 @@ export default function SlideRenderer({
       return (
         <h2
           style={isReaderMode ? { fontSize: "1.65em", lineHeight: "1.3" } : {}}
-          className={`font-semibold ${strongColorClass} mb-5 border-b-2 ${headerBorder} pb-1.5 mt-5 inline-block ${
+          className={`font-semibold ${strongColorClass} mb-5 border-b-2 ${headerBorder} pb-1.5 mt-5 inline-block break-inside-avoid-column break-inside-avoid ${
             isReaderMode ? "" : "text-xl sm:text-2xl"
           }`}
           {...props}
@@ -283,7 +327,7 @@ export default function SlideRenderer({
       return (
         <h3
           style={isReaderMode ? { fontSize: "1.35em", lineHeight: "1.4" } : {}}
-          className={`font-bold tracking-tight ${strongColorClass} mt-4 mb-2.5 ${
+          className={`font-bold tracking-tight ${strongColorClass} mt-4 mb-2.5 break-inside-avoid-column break-inside-avoid ${
             isReaderMode ? "" : "text-lg sm:text-xl"
           }`}
           {...props}
@@ -320,7 +364,7 @@ export default function SlideRenderer({
       return (
         <li
           style={isReaderMode ? { fontSize: "1.05em", lineHeight: "1.65" } : {}}
-          className={`flex items-start gap-3.5 my-3 pl-0.5 list-none ${textColorClass}`}
+          className={`flex items-start gap-3.5 my-3 pl-0.5 list-none break-inside-avoid-column break-inside-avoid ${textColorClass}`}
           {...props}
         >
           <div className={`w-2 h-2 rounded-full ${bulletColor} mr-0.5 mt-2 shrink-0`} />
@@ -337,14 +381,14 @@ export default function SlideRenderer({
         ? "bg-[#f5edd9] border-amber-800/50"
         : "bg-blue-50 border-blue-500";
       return (
-        <blockquote className={`pl-4 border-l-4 py-2 my-4 rounded-r-md ${bqBg} italic ${textColorClass}`} {...props}>
+        <blockquote className={`pl-4 border-l-4 py-2 my-4 rounded-r-md break-inside-avoid-column break-inside-avoid ${bqBg} italic ${textColorClass}`} {...props}>
           {children}
         </blockquote>
       );
     },
     img: ({ src, alt, ...props }: any) => {
       return (
-        <div className="my-6 flex flex-col items-center">
+        <div className="my-6 flex flex-col items-center break-inside-avoid-column break-inside-avoid">
           <img
             src={src}
             alt={alt || "Illustration"}
@@ -362,7 +406,7 @@ export default function SlideRenderer({
     },
     table: ({ children, ...props }: any) => {
       return (
-        <div className="overflow-x-auto my-6 rounded-lg border border-slate-200/50">
+        <div className="overflow-x-auto my-6 rounded-lg border border-slate-200/50 break-inside-avoid-column break-inside-avoid">
           <table className="w-full text-left border-collapse" {...props}>{children}</table>
         </div>
       );
@@ -414,7 +458,7 @@ export default function SlideRenderer({
         : "bg-slate-900 border-slate-950 text-slate-50";
 
       return (
-        <div className={`my-6 rounded-xl overflow-hidden border shadow-lg ${codeBgClass} font-mono text-sm relative group`}>
+        <div className={`my-6 rounded-xl overflow-hidden border shadow-lg ${codeBgClass} font-mono text-sm relative group break-inside-avoid-column break-inside-avoid`}>
           {/* Windows-like header */}
           <div className="flex items-center justify-between px-4 py-2.5 bg-black/20 border-b border-white/5 select-none">
             <div className="flex items-center gap-2">
@@ -477,7 +521,7 @@ export default function SlideRenderer({
       exit={{ opacity: 0, y: -7 }}
       transition={{ duration: 0.18, ease: "easeOut" }}
       style={isReaderMode ? { fontSize: `${readerFontSize}px`, fontFamily: fontFamilyStr } : {}}
-      className={`slide-content select-none py-1 text-left w-full h-full flex flex-col justify-start`}
+      className={`slide-content ${isReaderMode ? "select-text" : "select-none"} py-1 text-left w-full h-full flex flex-col justify-start`}
     >
       {canvasElements.length > 0 ? (
         <div className="flex-1 flex flex-col gap-6 items-center justify-center min-h-[360px] w-full">
@@ -633,15 +677,59 @@ export default function SlideRenderer({
           {overlayHeadings}
         </div>
       ) : (
-        <div className="markdown-body w-full">
-          <ReactMarkdown
-            remarkPlugins={[remarkMath]}
-            rehypePlugins={[rehypeKatex]}
-            components={mdComponents}
-          >
-            {content}
-          </ReactMarkdown>
-        </div>
+        isReaderMode && isSplitView ? (
+          (() => {
+            const pages = splitMarkdownIntoPages(content);
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 w-full pb-8">
+                {pages.map((pageContent, idx) => (
+                  <div
+                    key={idx}
+                    style={{ fontSize: `${readerFontSize}px`, fontFamily: fontFamilyStr }}
+                    className={`flex flex-col justify-between p-8 sm:p-10 rounded-2xl shadow-xl border transition-all duration-300 h-[88vh] overflow-y-auto no-scrollbar ${
+                      readerTheme === "warm"
+                        ? "bg-[#FAF6EF]/60 text-[#2C2417] border-[#ebdcc3] hover:shadow-2xl hover:bg-[#FAF6EF]"
+                        : readerTheme === "dark"
+                        ? "bg-[#1E2022]/60 text-[#E0E2E4] border-slate-800 hover:shadow-2xl hover:bg-[#1E2022]"
+                        : "bg-white text-slate-800 border-slate-200 hover:shadow-2xl"
+                    }`}
+                  >
+                    <div className="markdown-body w-full flex-1">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                        components={mdComponents}
+                      >
+                        {pageContent}
+                      </ReactMarkdown>
+                    </div>
+                    {/* Subtle page indicator inside each card */}
+                    <div className={`mt-6 pt-4 border-t border-dashed flex justify-between items-center text-[10px] uppercase font-bold tracking-wider opacity-60 shrink-0 ${
+                      readerTheme === "warm"
+                        ? "border-[#ebdcc3] text-[#a89679]"
+                        : readerTheme === "dark"
+                        ? "border-slate-800/80 text-slate-500"
+                        : "border-slate-250 text-slate-400"
+                    }`}>
+                      <span>Page {idx + 1}</span>
+                      <span>Section {idx + 1} of {pages.length}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()
+        ) : (
+          <div className="markdown-body w-full">
+            <ReactMarkdown
+              remarkPlugins={[remarkMath]}
+              rehypePlugins={[rehypeKatex]}
+              components={mdComponents}
+            >
+              {content}
+            </ReactMarkdown>
+          </div>
+        )
       )}
     </motion.div>
   );

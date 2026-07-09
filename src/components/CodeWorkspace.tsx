@@ -1,5 +1,5 @@
-import React, { useRef } from "react";
-import { Heading1, List, Image as ImageIcon, Bold, Italic, Code, Sparkles } from "lucide-react";
+import React, { useRef, useState } from "react";
+import { Heading1, List, Image as ImageIcon, Bold, Italic, Code, Sparkles, Mic, MicOff } from "lucide-react";
 
 interface CodeWorkspaceProps {
   value: string;
@@ -12,6 +12,8 @@ export default function CodeWorkspace({ value, onChange }: CodeWorkspaceProps) {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineRef = useRef<HTMLDivElement>(null);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   // Scroll sync logic between lines indicator and textarea
   const handleScroll = () => {
@@ -40,6 +42,57 @@ export default function CodeWorkspace({ value, onChange }: CodeWorkspaceProps) {
       textarea.focus();
       textarea.setSelectionRange(start + before.length, start + before.length + (selectedText || "text").length);
     }, 50);
+  };
+
+  // Voice Dictation functions
+  const startListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser. Try Chrome or Edge!");
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[event.results.length - 1][0].transcript;
+        insertText(" " + transcript.trim(), "");
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      console.error("Failed to start speech recognition", err);
+      setIsListening(false);
+    }
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (err) {
+        console.error("Error stopping recognition", err);
+      }
+    }
+    setIsListening(false);
   };
 
   // Handle Paste events for Copy & Paste Images
@@ -138,6 +191,33 @@ export default function CodeWorkspace({ value, onChange }: CodeWorkspaceProps) {
         >
           <ImageIcon className="w-3.5 h-3.5 text-slate-600" />
         </button>
+
+        <div className="h-4 w-px bg-slate-200 mx-1.5" />
+
+        {/* Start / Stop Voice Dictation Button */}
+        <div className="flex items-center gap-1">
+          {!isListening ? (
+            <button
+              onClick={startListening}
+              type="button"
+              title="Start Voice Dictation"
+              className="p-1 px-2.5 text-xs text-blue-700 bg-blue-50/80 border border-blue-200/50 hover:bg-blue-100 rounded-md transition flex items-center gap-1.5 cursor-pointer select-none font-bold shadow-3xs"
+            >
+              <Mic className="w-3.5 h-3.5 text-blue-600" />
+              <span>Voice Type</span>
+            </button>
+          ) : (
+            <button
+              onClick={stopListening}
+              type="button"
+              title="Stop Voice Dictation"
+              className="p-1 px-2.5 text-xs text-rose-700 bg-rose-100 border border-rose-300 font-extrabold rounded-md hover:bg-rose-200 transition flex items-center gap-1.5 cursor-pointer select-none animate-pulse shadow-md"
+            >
+              <MicOff className="w-3.5 h-3.5 text-rose-600 animate-bounce" />
+              <span>Stop Listening</span>
+            </button>
+          )}
+        </div>
 
         <div className="h-4 w-px bg-slate-200 mx-1.5" />
 
