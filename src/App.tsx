@@ -40,7 +40,10 @@ import {
   ZoomOut,
   Columns,
   Split,
-  Brain
+  Brain,
+  Pause,
+  SkipBack,
+  SkipForward
 } from "lucide-react";
 import { Workspace, Slide } from "./types";
 import SlideRenderer from "./components/SlideRenderer";
@@ -104,6 +107,8 @@ export default function App() {
   const [ttsPaused, setTtsPaused] = useState(false);
   const [ttsLoading, setTtsLoading] = useState(false);
   const [ttsSpeed, setTtsSpeed] = useState<number>(1.0);
+  const [audioCurrentTime, setAudioCurrentTime] = useState<number>(0);
+  const [audioDuration, setAudioDuration] = useState<number>(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Saving states
@@ -121,6 +126,7 @@ export default function App() {
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const [isReaderMode, setIsReaderMode] = useState<boolean>(false);
   const [isSplitView, setIsSplitView] = useState<boolean>(false);
+  const [isReaderAudioMenuOpen, setIsReaderAudioMenuOpen] = useState<boolean>(false);
   const [showReaderHeader, setShowReaderHeader] = useState<boolean>(false);
   const [readerTheme, setReaderTheme] = useState<"warm" | "light" | "dark">("warm");
   const [readerFontSize, setReaderFontSize] = useState<number>(18);
@@ -552,6 +558,8 @@ export default function App() {
     }
     setTtsPlaying(false);
     setTtsPaused(false);
+    setAudioCurrentTime(0);
+    setAudioDuration(0);
   };
 
   // Pause vocal speech playback
@@ -573,6 +581,35 @@ export default function App() {
     }
   };
 
+  // Skip back 5 seconds
+  const handleSkipBack = () => {
+    if (audioRef.current) {
+      const newTime = Math.max(0, audioRef.current.currentTime - 5);
+      audioRef.current.currentTime = newTime;
+      audioRef.current.playbackRate = ttsSpeed;
+      setAudioCurrentTime(newTime);
+    }
+  };
+
+  // Skip forward 5 seconds
+  const handleSkipForward = () => {
+    if (audioRef.current) {
+      const newTime = Math.min(audioDuration, audioRef.current.currentTime + 5);
+      audioRef.current.currentTime = newTime;
+      audioRef.current.playbackRate = ttsSpeed;
+      setAudioCurrentTime(newTime);
+    }
+  };
+
+  // Seek audio to progress ratio
+  const handleSeek = (newTime: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime;
+      audioRef.current.playbackRate = ttsSpeed;
+      setAudioCurrentTime(newTime);
+    }
+  };
+
   // Indian Accent Natural Vocal Synthesizer Executor
   const handleGenerateTTS = async (textToPlay: string) => {
     if (!textToPlay.trim()) return;
@@ -581,6 +618,8 @@ export default function App() {
       setTtsPlaying(true);
       setTtsPaused(false);
       setTtsLoading(true);
+      setAudioCurrentTime(0);
+      setAudioDuration(0);
 
       // Clean speech play queue
       if (audioRef.current) {
@@ -603,10 +642,27 @@ export default function App() {
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
 
+      // Event handlers for tracking progress
+      audio.ontimeupdate = () => {
+        setAudioCurrentTime(audio.currentTime);
+      };
+
+      audio.onloadedmetadata = () => {
+        setAudioDuration(audio.duration || 0);
+      };
+
+      // Prevent browsers from reverting user custom playback rate during playback changes
+      audio.onratechange = () => {
+        if (audio.playbackRate !== ttsSpeed) {
+          audio.playbackRate = ttsSpeed;
+        }
+      };
+
       // Trigger standard HTML5 media behaviors with secure play triggers
       audio.oncanplaythrough = () => {
         setTtsLoading(false);
         audio.playbackRate = ttsSpeed;
+        setAudioDuration(audio.duration || 0);
         audio.play().catch((playErr) => {
           console.error("Audio playback interrupted by browser constraints:", playErr);
           setTtsPlaying(false);
@@ -617,6 +673,7 @@ export default function App() {
       audio.onended = () => {
         setTtsPlaying(false);
         setTtsPaused(false);
+        setAudioCurrentTime(0);
       };
 
       audio.onerror = () => {
@@ -638,6 +695,13 @@ export default function App() {
     if (audioRef.current) {
       audioRef.current.playbackRate = newSpeed;
     }
+  };
+
+  const formatTime = (secs: number) => {
+    if (isNaN(secs) || secs === Infinity) return "0:00";
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
   };
 
   // Add new slide index in client manually
@@ -2132,89 +2196,182 @@ export default function App() {
 
                 <div className="h-4 w-px bg-slate-800" />
 
-                {/* Reader Mode Floating Speak / Pause / Stop Controls */}
-                <div className="flex items-center gap-1">
-                  {!ttsPlaying ? (
-                    <button
-                      disabled={!clientSlides[activeSlideIndex]?.markdownContent?.trim() || ttsLoading}
-                      onClick={() => {
-                        handleGenerateTTS(
-                          clientSlides[activeSlideIndex]?.markdownContent || "Welcome to ScribeSlide AI presentation unit"
-                        );
-                      }}
-                      className="p-1 px-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-full text-[10px] font-bold transition flex items-center gap-1 cursor-pointer select-none border border-transparent shadow-xs"
-                      title="Listen via Neural Text-to-Speech"
-                    >
-                      {ttsLoading ? (
-                        <Loader2 className="w-3 h-3 animate-spin text-white" />
-                      ) : (
-                        <Volume2 className="w-3 h-3 text-white shrink-0" />
-                      )}
-                      <span>Listen</span>
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-1.5 bg-slate-800/80 p-0.5 rounded-full border border-slate-700/80 shadow-xs">
-                      {/* Play/Pause toggle */}
-                      {ttsLoading ? (
-                        <div className="px-2.5 py-0.5 text-[9px] text-slate-300 font-semibold flex items-center gap-1 select-none">
-                          <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-400" />
-                          <span>Generating...</span>
+                {/* Reader Mode Integrated Audio Controller Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsReaderAudioMenuOpen((prev) => !prev)}
+                    className={`p-1 px-3 rounded-full text-[10px] font-bold transition-all duration-150 flex items-center gap-1.5 cursor-pointer select-none border shadow-md ${
+                      ttsPlaying
+                        ? "bg-indigo-600 text-white border-transparent"
+                        : isReaderAudioMenuOpen
+                        ? "bg-slate-800 text-white border-slate-700"
+                        : "bg-slate-800/40 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800/80"
+                    }`}
+                    title="Open Neural Audio Controls"
+                  >
+                    {ttsLoading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                    ) : ttsPlaying && !ttsPaused ? (
+                      <span className="relative flex h-3.5 w-3.5 items-center justify-center">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                        <Volume2 className="relative w-3.5 h-3.5 text-indigo-300" />
+                      </span>
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                    <span>Sound</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isReaderAudioMenuOpen ? "rotate-180 text-white" : "text-slate-500"}`} />
+                  </button>
+
+                  {/* Absolute Audio Dropdown Menu */}
+                  {isReaderAudioMenuOpen && (
+                    <>
+                      {/* Invisible backdrop to close on click outside */}
+                      <div className="fixed inset-0 z-40" onClick={() => setIsReaderAudioMenuOpen(false)} />
+                      
+                      <div className="absolute top-10 right-0 mt-2 w-80 bg-slate-950 border border-slate-800 rounded-2xl p-4 shadow-2xl flex flex-col gap-3.5 z-50 text-white animate-fadeIn select-none">
+                        
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                          <div className="flex items-center gap-1.5">
+                            <Volume2 className="w-4 h-4 text-indigo-400" />
+                            <span className="text-xs font-bold text-slate-200 tracking-wide uppercase">Neural Narrator</span>
+                          </div>
+                          {ttsPlaying && !ttsLoading && (
+                            <span className="flex items-center gap-1 bg-indigo-950 border border-indigo-900 px-2 py-0.5 rounded-full">
+                              <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping" />
+                              <span className="text-[8px] font-mono font-bold text-indigo-300 uppercase tracking-widest">
+                                {ttsPaused ? "Paused" : "Playing"}
+                              </span>
+                            </span>
+                          )}
                         </div>
-                      ) : !ttsPaused ? (
-                        <button
-                          onClick={handlePauseSpeech}
-                          className="p-1 px-2.5 bg-slate-700 hover:bg-slate-655 text-slate-200 rounded-full text-[10px] font-bold transition flex items-center gap-1 cursor-pointer select-none"
-                          title="Pause Narration"
-                        >
-                          <span className="flex items-center gap-0.5 w-2.5 h-2.5 justify-center">
-                            <span className="w-0.5 h-2 bg-slate-300 rounded-xs" />
-                            <span className="w-0.5 h-2 bg-slate-300 rounded-xs" />
-                          </span>
-                          <span>Pause</span>
-                        </button>
-                      ) : (
-                        <button
-                          onClick={handleResumeSpeech}
-                          className="p-1 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-[10px] font-bold transition flex items-center gap-1 cursor-pointer select-none"
-                          title="Resume Narration"
-                        >
-                          <Play className="w-2.5 h-2.5 text-white fill-white" />
-                          <span>Resume</span>
-                        </button>
-                      )}
 
-                      {/* Stop Button */}
-                      <button
-                        onClick={handleStopSpeech}
-                        className="p-1 px-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full text-[10px] font-bold transition flex items-center gap-1 cursor-pointer select-none"
-                        title="Stop Narration"
-                      >
-                        <VolumeX className="w-3 h-3 text-white" />
-                        <span>Stop</span>
-                      </button>
-                    </div>
+                        {/* Audio Progress Bar (Scrubber) */}
+                        <div className="flex flex-col gap-1.5 bg-slate-900/40 p-2.5 rounded-xl border border-slate-900/60">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono font-bold">
+                            <span>{formatTime(audioCurrentTime)}</span>
+                            <span>{formatTime(audioDuration)}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={audioDuration || 100}
+                            step={0.1}
+                            value={audioCurrentTime}
+                            disabled={!ttsPlaying || ttsLoading}
+                            onChange={(e) => {
+                              const seekVal = parseFloat(e.target.value);
+                              handleSeek(seekVal);
+                            }}
+                            className="w-full h-1 bg-slate-800 accent-indigo-500 rounded-lg appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          />
+                        </div>
+
+                        {/* Interactive Playback Navigation Suite */}
+                        <div className="flex items-center justify-center gap-3">
+                          {/* 5s Back Skip */}
+                          <button
+                            onClick={handleSkipBack}
+                            disabled={!ttsPlaying || ttsLoading}
+                            className="p-2 bg-slate-900 hover:bg-slate-850 disabled:opacity-35 text-slate-400 hover:text-white rounded-xl transition cursor-pointer border border-slate-800/40"
+                            title="Rewind 5 Seconds"
+                          >
+                            <SkipBack className="w-4 h-4" />
+                          </button>
+
+                          {/* Play/Pause Toggle */}
+                          {!ttsPlaying ? (
+                            <button
+                              disabled={!clientSlides[activeSlideIndex]?.markdownContent?.trim() || ttsLoading}
+                              onClick={() => {
+                                handleGenerateTTS(
+                                  clientSlides[activeSlideIndex]?.markdownContent || "Welcome to ScribeSlide AI presentation unit"
+                                );
+                              }}
+                              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                              title="Generate Voice Narration"
+                            >
+                              {ttsLoading ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Volume2 className="w-3.5 h-3.5" />
+                              )}
+                              <span>Listen Slide</span>
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              {!ttsPaused ? (
+                                <button
+                                  onClick={handlePauseSpeech}
+                                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-slate-700/50"
+                                  title="Pause Narration"
+                                >
+                                  <span className="flex items-center gap-0.5 w-3.5 h-3.5 justify-center">
+                                    <span className="w-0.75 h-3 bg-slate-300 rounded-xs" />
+                                    <span className="w-0.75 h-3 bg-slate-300 rounded-xs" />
+                                  </span>
+                                  <span>Pause</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={handleResumeSpeech}
+                                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                                  title="Resume Narration"
+                                >
+                                  <Play className="w-3.5 h-3.5 fill-white" />
+                                  <span>Resume</span>
+                                </button>
+                              )}
+
+                              {/* Stop */}
+                              <button
+                                onClick={handleStopSpeech}
+                                className="p-2 bg-rose-950/80 hover:bg-rose-900 border border-rose-900/50 text-rose-300 hover:text-rose-100 rounded-xl transition cursor-pointer"
+                                title="Stop Narration"
+                              >
+                                <VolumeX className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+
+                          {/* 5s Forward Skip */}
+                          <button
+                            onClick={handleSkipForward}
+                            disabled={!ttsPlaying || ttsLoading}
+                            className="p-2 bg-slate-900 hover:bg-slate-850 disabled:opacity-35 text-slate-400 hover:text-white rounded-xl transition cursor-pointer border border-slate-800/40"
+                            title="Skip 5 Seconds Forward"
+                          >
+                            <SkipForward className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Speed Control Rate Slider */}
+                        <div className="flex items-center justify-between bg-slate-900/60 border border-slate-900/60 px-3 py-2 rounded-xl text-xs">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Speed Rate</span>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="0.5"
+                              max="2.0"
+                              step="0.1"
+                              value={ttsSpeed}
+                              onChange={(e) => {
+                                const newSpeed = parseFloat(e.target.value);
+                                setTtsSpeed(newSpeed);
+                                if (audioRef.current) {
+                                  audioRef.current.playbackRate = newSpeed;
+                                }
+                              }}
+                              className="w-24 accent-indigo-500 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                            />
+                            <span className="font-mono font-bold text-indigo-400 min-w-[24px] text-right">{ttsSpeed}x</span>
+                          </div>
+                        </div>
+
+                      </div>
+                    </>
                   )}
-                </div>
-
-                {/* Reader Mode Audio Speed Controller */}
-                <div className="flex items-center gap-1.5 bg-slate-900/60 border border-slate-800 px-2 py-1 rounded-full shrink-0 select-none">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Speed</span>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2.0"
-                    step="0.1"
-                    value={ttsSpeed}
-                    onChange={(e) => {
-                      const newSpeed = parseFloat(e.target.value);
-                      setTtsSpeed(newSpeed);
-                      if (audioRef.current) {
-                        audioRef.current.playbackRate = newSpeed;
-                      }
-                    }}
-                    className="w-14 accent-blue-500 h-0.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <span className="text-[9px] font-mono font-bold text-slate-300 min-w-[22px] text-right">{ttsSpeed}x</span>
                 </div>
 
                 <div className="h-4 w-px bg-slate-800" />
