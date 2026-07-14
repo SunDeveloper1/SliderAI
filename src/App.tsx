@@ -43,10 +43,14 @@ import {
   Brain,
   Pause,
   SkipBack,
-  SkipForward
+  SkipForward,
+  MousePointer,
+  PenTool,
+  CircleDot
 } from "lucide-react";
 import { Workspace, Slide } from "./types";
 import SlideRenderer from "./components/SlideRenderer";
+import ReaderCanvas from "./components/ReaderCanvas";
 import CodeWorkspace from "./components/CodeWorkspace";
 import CanvasEditor from "./components/CanvasEditor";
 import { RevisionShorts } from "./components/RevisionShorts";
@@ -126,7 +130,10 @@ export default function App() {
   const [previewWidth, setPreviewWidth] = useState<number>(420);
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const [isReaderMode, setIsReaderMode] = useState<boolean>(false);
-  const [isSplitView, setIsSplitView] = useState<boolean>(false);
+  const [readerTool, setReaderTool] = useState<"none" | "laser" | "pen">("none");
+  const [readerColor, setReaderColor] = useState<string>("#ef4444");
+  const [isReaderColorMenuOpen, setIsReaderColorMenuOpen] = useState<boolean>(false);
+  const [readerDrawings, setReaderDrawings] = useState<Record<number, any[]>>({});
   const [isReaderAudioMenuOpen, setIsReaderAudioMenuOpen] = useState<boolean>(false);
   const [showReaderHeader, setShowReaderHeader] = useState<boolean>(false);
   const [readerTheme, setReaderTheme] = useState<"warm" | "light" | "dark">("warm");
@@ -1619,20 +1626,6 @@ export default function App() {
                           A+
                         </button>
                       </div>
-
-                      {/* Split View Toggle */}
-                      <button
-                        onClick={() => setIsSplitView(prev => !prev)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-md border transition cursor-pointer ${
-                          isSplitView
-                            ? "bg-indigo-50 border-indigo-200 text-indigo-700 font-bold"
-                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 font-bold"
-                        }`}
-                        title="Toggle Split View (Side-by-Side Columns)"
-                      >
-                        <Split className="w-3.5 h-3.5" />
-                        <span>Split View</span>
-                      </button>
                     </div>
                   )}
 
@@ -1770,7 +1763,7 @@ export default function App() {
                       style={isReaderMode ? {} : { zoom: `${previewZoom}%` }}
                       className={`transition-all duration-300 ${
                         isReaderMode
-                          ? `w-full min-h-full flex flex-col justify-between p-8 sm:p-12 md:p-16 ${isSplitView ? "max-w-7xl" : "max-w-4xl"} mx-auto ${
+                          ? `w-full min-h-full flex flex-col justify-between p-8 sm:p-12 md:p-16 max-w-4xl mx-auto ${
                               readerTheme === "warm"
                                 ? "text-[#2C2C2A]"
                                 : readerTheme === "dark"
@@ -1787,7 +1780,7 @@ export default function App() {
                             content={clientSlides[activeSlideIndex].markdownContent}
                             canvasData={clientSlides[activeSlideIndex].canvasData || ""}
                             isReaderMode={isReaderMode}
-                            isSplitView={isSplitView}
+                            isSplitView={false}
                             readerTheme={readerTheme}
                             readerFontSize={readerFontSize}
                             readerFontFamily={readerFontFamily}
@@ -2177,22 +2170,118 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Split View Toggle */}
+                {/* Interactive presentation tools (Laser / Pen) like OneNote */}
                 {isReaderMode && (
                   <>
                     <div className="h-4 w-px bg-slate-800" />
-                    <button
-                      onClick={() => setIsSplitView(prev => !prev)}
-                      className={`p-1 px-3 rounded-full text-[10px] font-bold transition duration-150 flex items-center gap-1 cursor-pointer ${
-                        isSplitView
-                          ? "bg-indigo-600 text-white"
-                          : "text-slate-400 hover:text-slate-200 bg-slate-800/40 hover:bg-slate-800"
-                      }`}
-                      title="Toggle Split Layout (2 Columns)"
-                    >
-                      <Split className="w-3 h-3" />
-                      <span>Split View</span>
-                    </button>
+                    <div className="flex bg-slate-850 p-0.5 rounded-full border border-slate-800">
+                      <button
+                        onClick={() => setReaderTool("none")}
+                        className={`p-1 px-2.5 rounded-full text-[10px] font-bold transition duration-150 flex items-center gap-1 cursor-pointer ${
+                          readerTool === "none"
+                            ? "bg-indigo-600 text-white"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                        title="Normal Cursor Mode"
+                      >
+                        <MousePointer className="w-3 h-3" />
+                        <span className="hidden sm:inline">Cursor</span>
+                      </button>
+                      <button
+                        onClick={() => setReaderTool("pen")}
+                        className={`p-1 px-2.5 rounded-full text-[10px] font-bold transition duration-150 flex items-center gap-1 cursor-pointer ${
+                          readerTool === "pen"
+                            ? "bg-indigo-600 text-white"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                        title="Pen Tool (Draw directly over slide)"
+                      >
+                        <PenTool className="w-3 h-3" />
+                        <span className="hidden sm:inline">Pen</span>
+                      </button>
+                      <button
+                        onClick={() => setReaderTool("laser")}
+                        className={`p-1 px-2.5 rounded-full text-[10px] font-bold transition duration-150 flex items-center gap-1.5 cursor-pointer ${
+                          readerTool === "laser"
+                            ? "bg-rose-600 text-white"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                        title="Laser Pointer (Glowing fading trail)"
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${readerTool === "laser" ? "bg-white animate-ping" : "bg-rose-500"}`} />
+                        <CircleDot className="w-3 h-3" />
+                        <span className="hidden sm:inline">Laser</span>
+                      </button>
+                    </div>
+
+                    {readerTool !== "none" && (
+                      <>
+                        <div className="h-4 w-px bg-slate-800" />
+                        {/* Custom OneNote style brush colors Dropdown */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setIsReaderColorMenuOpen(prev => !prev)}
+                            className="p-1 px-2.5 bg-slate-850 hover:bg-slate-800 text-slate-450 hover:text-slate-100 border border-slate-800 rounded-full text-[10px] font-bold transition duration-150 flex items-center gap-1.5 cursor-pointer select-none"
+                            title="Choose Drawing/Laser Color"
+                          >
+                            <span 
+                              className="w-3 h-3 rounded-full border border-white/20 shadow-sm" 
+                              style={{ backgroundColor: readerColor }}
+                            />
+                            <span className="hidden xs:inline">Color</span>
+                            <span className="text-[8px] opacity-60">▼</span>
+                          </button>
+
+                          {isReaderColorMenuOpen && (
+                            <>
+                              {/* Backdrop overlay to close when clicking outside */}
+                              <div 
+                                className="fixed inset-0 z-40" 
+                                onClick={() => setIsReaderColorMenuOpen(false)}
+                              />
+                              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-800 rounded-xl p-2.5 shadow-2xl flex flex-col gap-2 min-w-[120px] z-50">
+                                <div className="text-[9px] text-slate-400 font-bold px-1 select-none uppercase tracking-wider">
+                                  Select Color
+                                </div>
+                                <div className="grid grid-cols-5 gap-1.5">
+                                  {[
+                                    { hex: "#ef4444", name: "Red", bg: "bg-red-500" },
+                                    { hex: "#22c55e", name: "Green", bg: "bg-green-500" },
+                                    { hex: "#3b82f6", name: "Blue", bg: "bg-blue-500" },
+                                    { hex: "#eab308", name: "Yellow", bg: "bg-yellow-500" },
+                                    { hex: "#a855f7", name: "Purple", bg: "bg-purple-500" },
+                                  ].map((c) => (
+                                    <button
+                                      key={c.hex}
+                                      onClick={() => {
+                                        setReaderColor(c.hex);
+                                        setIsReaderColorMenuOpen(false);
+                                      }}
+                                      className={`w-4.5 h-4.5 rounded-full ${c.bg} transition-all duration-150 relative cursor-pointer ${
+                                        readerColor === c.hex
+                                          ? "ring-2 ring-white scale-110 shadow-md"
+                                          : "opacity-80 hover:opacity-100 hover:scale-110"
+                                      }`}
+                                      title={c.name}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="h-4 w-px bg-slate-800" />
+                        <button
+                          onClick={() => setReaderDrawings((prev) => ({ ...prev, [activeSlideIndex]: [] }))}
+                          className="p-1 px-2 bg-slate-850 hover:bg-rose-950 text-slate-400 hover:text-rose-200 border border-slate-800 rounded-lg text-[9px] font-bold transition duration-150 flex items-center gap-1 cursor-pointer select-none"
+                          title="Clear drawings on this page"
+                        >
+                          <Trash2 className="w-2.5 h-2.5" />
+                          <span>Clear</span>
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
 
@@ -2428,43 +2517,52 @@ export default function App() {
                 }`}
               >
                 {/* Dynamically parsed slide contents inside fullscreen stage */}
-                <div className={isReaderMode ? `flex-1 overflow-y-auto w-full ${isSplitView ? "pt-6 pb-6 px-4 sm:px-6 md:px-8 max-w-none" : "pt-12 pb-12 px-6 sm:px-12 md:px-20"}` : "flex-1 overflow-y-auto pr-1"}>
-                  <div className={isReaderMode ? `${isSplitView ? "max-w-[96vw]" : "max-w-4xl"} mx-auto min-h-full flex flex-col justify-between w-full` : "h-full flex flex-col justify-between"}>
+                <div className={isReaderMode ? "flex-1 overflow-y-auto w-full pt-12 pb-12 px-6 sm:px-12 md:px-20 relative" : "flex-1 overflow-y-auto pr-1"}>
+                  <div className={isReaderMode ? "max-w-4xl mx-auto min-h-full flex flex-col justify-between w-full relative" : "h-full flex flex-col justify-between"}>
                     {clientSlides[activeSlideIndex] ? (
-                      <SlideRenderer
-                        content={clientSlides[activeSlideIndex].markdownContent}
-                        canvasData={clientSlides[activeSlideIndex].canvasData || ""}
-                        isReaderMode={isReaderMode}
-                        isSplitView={isSplitView}
-                        readerTheme={readerTheme}
-                        readerFontSize={readerFontSize}
-                        readerFontFamily={readerFontFamily}
-                      />
+                      <div className="relative flex-1 flex flex-col min-h-0">
+                        <SlideRenderer
+                          content={clientSlides[activeSlideIndex].markdownContent}
+                          canvasData={clientSlides[activeSlideIndex].canvasData || ""}
+                          isReaderMode={isReaderMode}
+                          isSplitView={false}
+                          readerTheme={readerTheme}
+                          readerFontSize={readerFontSize}
+                          readerFontFamily={readerFontFamily}
+                        />
+                        {isReaderMode && (
+                          <ReaderCanvas
+                            currentSlideIndex={activeSlideIndex}
+                            tool={readerTool}
+                            color={readerColor}
+                            drawings={readerDrawings}
+                            setDrawings={setReaderDrawings}
+                          />
+                        )}
+                      </div>
                     ) : (
                       <div className="text-slate-400 text-center py-20 font-mono text-sm leading-normal">
                         No active slide content found. Create a slide page first.
                       </div>
                     )}
 
-                    {/* Footer section of center slide - Hidden in Split View */}
-                    {!isSplitView && (
-                      <div className={`mt-10 flex justify-between items-end border-t pt-6 shrink-0 ${
-                        isReaderMode
-                          ? readerTheme === "warm"
-                            ? "border-[#ebdcc3] text-[#a89679]"
-                            : readerTheme === "dark"
-                            ? "border-slate-800/80 text-slate-500"
-                            : "border-slate-100 text-slate-400"
-                          : "border-slate-150 text-slate-350"
-                      }`}>
-                        <div className="text-xs font-mono font-bold">
-                          Slide {activeSlideIndex + 1} / {clientSlides.length || 1}
-                        </div>
-                        <div className="text-[10px] font-sans font-bold uppercase tracking-widest opacity-60">
-                          {isReaderMode ? "ScribeSlide Fullscreen Reader" : "ScribeSlide Presentation"}
-                        </div>
+                    {/* Footer section of center slide */}
+                    <div className={`mt-10 flex justify-between items-end border-t pt-6 shrink-0 ${
+                      isReaderMode
+                        ? readerTheme === "warm"
+                          ? "border-[#ebdcc3] text-[#a89679]"
+                          : readerTheme === "dark"
+                          ? "border-slate-800/80 text-slate-500"
+                          : "border-slate-100 text-slate-400"
+                        : "border-slate-150 text-slate-350"
+                    }`}>
+                      <div className="text-xs font-mono font-bold">
+                        Slide {activeSlideIndex + 1} / {clientSlides.length || 1}
                       </div>
-                    )}
+                      <div className="text-[10px] font-sans font-bold uppercase tracking-widest opacity-60">
+                        {isReaderMode ? "ScribeSlide Fullscreen Reader" : "ScribeSlide Presentation"}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
